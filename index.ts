@@ -2,6 +2,8 @@ import express, { Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
+import { GoogleRoutes } from "./routes/googleRoutes";
+import session from "express-session";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -9,6 +11,13 @@ const prisma = new PrismaClient();
 dotenv.config();
 app.use(express.json());
 app.use(cors());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET as string,
+    resave: false,
+    saveUninitialized: true,
+  })
+);
 
 async function checkPrismaConnection() {
   try {
@@ -20,6 +29,8 @@ async function checkPrismaConnection() {
 }
 
 checkPrismaConnection();
+
+app.use("/auth/google", GoogleRoutes)
 
 app.get('/', (_, res: Response) => {
   res.send('Hello World!');
