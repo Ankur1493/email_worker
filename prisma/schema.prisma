@@ -25,6 +25,7 @@ model User {
 
 model Email {
   id        Int      @id @default(autoincrement())
+  emailId   String @unique 
   receipent String
   subject   String
   body      String

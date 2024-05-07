@@ -51,7 +51,7 @@ router.post("/", async (req: Request, res: Response) => {
         raw: encodedMessage,
       },
     });
-    if (!sendResponse) {
+    if (!sendResponse || !sendResponse.data.id) {
       return res.status(400).json({
         status: "failed",
         message: "problem in sending the mail"
@@ -63,7 +63,8 @@ router.post("/", async (req: Request, res: Response) => {
         subject: mailSubject,
         body: mailBody,
         userId: userId,
-        receipent: mailRecipient
+        receipent: mailRecipient,
+        emailId: sendResponse.data.id
       },
     });
 
@@ -72,6 +73,69 @@ router.post("/", async (req: Request, res: Response) => {
       message: "Email sent and saved successfully",
       emailDetails: savedEmail,
     });
+  } catch (err) {
+    return res.status(500).json({
+      status: "failed",
+      message: "This one's on us.",
+    });
+  }
+});
+
+router.get("/:id/:userId", async (req: Request, res: Response) => {
+  const userId = req.params.userId as string;
+  const emailId = req.params.id as string;
+
+  try {
+    if (!userId) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Send all details"
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: parseInt(userId),
+      },
+    });
+
+    const accessToken = user?.accessToken;
+    const refreshToken = user?.refreshToken;
+
+    if (!accessToken || !refreshToken) {
+      return res.status(400).json({
+        status: "failed",
+        message: "You are not authorized. Try to login again.",
+      });
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const thread = await gmail.users.threads.get({
+      userId: 'me',
+      id: emailId,
+    });
+
+    let messageStatus = false;
+    if (thread.data.messages && thread.data.messages.length > 1) {
+      await prisma.email.update({
+        where: {
+          emailId: emailId
+        },
+        data: {
+          replied: true,
+        },
+      });
+      messageStatus = true;
+    }
+
+    return res.status(200).json({
+      status: "success",
+      replied: messageStatus
+    });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({

@@ -52,7 +52,7 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 raw: encodedMessage,
             },
         });
-        if (!sendResponse) {
+        if (!sendResponse || !sendResponse.data.id) {
             return res.status(400).json({
                 status: "failed",
                 message: "problem in sending the mail"
@@ -63,13 +63,69 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 subject: mailSubject,
                 body: mailBody,
                 userId: userId,
-                receipent: mailRecipient
+                receipent: mailRecipient,
+                emailId: sendResponse.data.id
             },
         });
         res.status(200).json({
             status: "success",
             message: "Email sent and saved successfully",
             emailDetails: savedEmail,
+        });
+    }
+    catch (err) {
+        return res.status(500).json({
+            status: "failed",
+            message: "This one's on us.",
+        });
+    }
+}));
+router.get("/:id/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.params.userId;
+    const emailId = req.params.id;
+    try {
+        if (!userId) {
+            return res.status(400).json({
+                status: "failed",
+                message: "Send all details"
+            });
+        }
+        const user = yield prisma.user.findUnique({
+            where: {
+                id: parseInt(userId),
+            },
+        });
+        const accessToken = user === null || user === void 0 ? void 0 : user.accessToken;
+        const refreshToken = user === null || user === void 0 ? void 0 : user.refreshToken;
+        if (!accessToken || !refreshToken) {
+            return res.status(400).json({
+                status: "failed",
+                message: "You are not authorized. Try to login again.",
+            });
+        }
+        const oauth2Client = new googleapis_1.google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+        const gmail = googleapis_1.google.gmail({ version: 'v1', auth: oauth2Client });
+        const thread = yield gmail.users.threads.get({
+            userId: 'me',
+            id: emailId,
+        });
+        console.log(thread);
+        let messageStatus = false;
+        if (thread.data.messages && thread.data.messages.length > 1) {
+            yield prisma.email.update({
+                where: {
+                    emailId: emailId
+                },
+                data: {
+                    opened: true,
+                },
+            });
+            messageStatus = true;
+        }
+        return res.status(200).json({
+            status: "success",
+            messageStatus
         });
     }
     catch (err) {
