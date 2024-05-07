@@ -17,6 +17,7 @@ datasource db {
 model User {
   id            Int     @id @default(autoincrement())
   email         String  @unique
+  name          String
   accessToken   String
   refreshToken  String
   emails        Email[] // Relation field to connect users with their emails

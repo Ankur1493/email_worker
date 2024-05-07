@@ -1,25 +1,59 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy, Profile } from "passport-google-oauth20";
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 passport.use(new GoogleStrategy({
   clientID: process.env.CLIENT_ID as string,
   clientSecret: process.env.CLIENT_SECRET as string,
   callbackURL: 'http://localhost:3000/auth/google/callback'
 },
-  (accessToken, refreshToken, profile, cb) => {
-    // Here, you would ideally match the Google user with your user database
-    // For this example, we'll just pass the profile through
-    console.log(process.env.CALLBACK_URL)
-    console.log(profile)
-    return cb(null, profile);
-  }
-));
+  async (accessToken, refreshToken, profile, cb) => {
+    const email = profile.emails?.[0]?.value;
+    if (!email) {
+      return cb(new Error('Google account has no email'));
+    }
+    try {
+      let user = await prisma.user.findUnique({
+        where: {
+          email: email,
+        },
+      });
 
-passport.serializeUser((user, done) => {
-  done(null, user);
+      if (user) {
+        user = await prisma.user.update({
+          where: { email: email },
+          data: { accessToken: accessToken },
+        });
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email: email,
+            name: profile.displayName,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+          },
+        });
+      }
+      return cb(null, user);
+    } catch (error: any) {
+      return cb(error);
+    }
+  }));
+
+passport.serializeUser((user: any, done) => {
+  done(null, user.id); // Serialize user by ID
 });
-passport.deserializeUser((obj: any, done) => {
-  done(null, obj);
+
+passport.deserializeUser(async (id: any, done) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
 });
 
 export default passport;
+
