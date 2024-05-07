@@ -26,8 +26,6 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
     if (!email) {
         return cb(new Error('Google account has no email'));
     }
-    console.log(`refresh ---- ${refreshToken}`);
-    console.log(`access ------ ${accessToken}`);
     try {
         let user = yield prisma.user.findUnique({
             where: {

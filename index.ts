@@ -4,6 +4,7 @@ import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 import { GoogleRoutes } from "./routes/googleRoutes";
 import session from "express-session";
+import { mailRouter } from "./routes/mailRoutes";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -31,6 +32,7 @@ async function checkPrismaConnection() {
 checkPrismaConnection();
 
 app.use("/auth/google", GoogleRoutes)
+app.use("/mail", mailRouter)
 
 app.get('/', (_, res: Response) => {
   res.send('Hello World!');

@@ -18,6 +18,7 @@ const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
 const googleRoutes_1 = require("./routes/googleRoutes");
 const express_session_1 = __importDefault(require("express-session"));
+const mailRoutes_1 = require("./routes/mailRoutes");
 const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 dotenv_1.default.config();
@@ -41,6 +42,7 @@ function checkPrismaConnection() {
 }
 checkPrismaConnection();
 app.use("/auth/google", googleRoutes_1.GoogleRoutes);
+app.use("/mail", mailRoutes_1.mailRouter);
 app.get('/', (_, res) => {
     res.send('Hello World!');
 });
