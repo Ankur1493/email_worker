@@ -27,6 +27,7 @@ model Email {
   id        Int      @id @default(autoincrement())
   emailId   String @unique 
   receipent String
+  recipientId String @unique
   subject   String
   body      String
   opened    Boolean  @default(false)

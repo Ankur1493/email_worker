@@ -13,6 +13,7 @@ exports.mailRouter = void 0;
 const client_1 = require("@prisma/client");
 const express_1 = require("express");
 const googleapis_1 = require("googleapis");
+const uuid_1 = require("uuid");
 const prisma = new client_1.PrismaClient();
 const router = (0, express_1.Router)();
 exports.mailRouter = router;
@@ -33,7 +34,7 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const accessToken = user === null || user === void 0 ? void 0 : user.accessToken;
         const refreshToken = user === null || user === void 0 ? void 0 : user.refreshToken;
         if (!accessToken || !refreshToken) {
-            return res.status(400).json({
+            return res.status(401).json({
                 status: "failed",
                 message: "You are not authorized. Try to login again.",
             });
@@ -44,7 +45,8 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             refresh_token: refreshToken,
         });
         const gmail = googleapis_1.google.gmail({ version: 'v1', auth: oauth2Client });
-        const emailContent = `Content-Type: text/html; charset="UTF-8"\nMIME-Version: 1.0\nContent-Transfer-Encoding: 7bit\nto: ${mailRecipient}\nsubject: ${mailSubject}\n\n<html><body>${mailBody}<img src="https://yourserver.com/tracking.gif?emailId=UNIQUE_EMAIL_ID" alt="" style="display:none;"></body></html>`;
+        const recipientId = (0, uuid_1.v4)();
+        const emailContent = `Content-Type: text/html; charset="UTF-8"\nMIME-Version: 1.0\nContent-Transfer-Encoding: 7bit\nto: ${mailRecipient}\nsubject: ${mailSubject}\n\n<html><body>${mailBody}<img src="http://localhost:3000/mail/track/${recipientId}" alt="" style="display:none;"></body></html>`;
         const encodedMessage = Buffer.from(emailContent).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         const sendResponse = yield gmail.users.messages.send({
             userId: 'me',
@@ -53,7 +55,7 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             },
         });
         if (!sendResponse || !sendResponse.data.id) {
-            return res.status(400).json({
+            return res.status(500).json({
                 status: "failed",
                 message: "problem in sending the mail"
             });
@@ -64,7 +66,8 @@ router.post("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 body: mailBody,
                 userId: userId,
                 receipent: mailRecipient,
-                emailId: sendResponse.data.id
+                emailId: sendResponse.data.id,
+                recipientId: recipientId,
             },
         });
         res.status(200).json({
@@ -110,7 +113,6 @@ router.get("/:id/:userId", (req, res) => __awaiter(void 0, void 0, void 0, funct
             userId: 'me',
             id: emailId,
         });
-        console.log(thread);
         let messageStatus = false;
         if (thread.data.messages && thread.data.messages.length > 1) {
             yield prisma.email.update({
@@ -118,15 +120,47 @@ router.get("/:id/:userId", (req, res) => __awaiter(void 0, void 0, void 0, funct
                     emailId: emailId
                 },
                 data: {
-                    opened: true,
+                    replied: true,
                 },
             });
             messageStatus = true;
         }
         return res.status(200).json({
             status: "success",
-            messageStatus
+            replied: messageStatus
         });
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({
+            status: "failed",
+            message: "This one's on us.",
+        });
+    }
+}));
+router.get("/track/:recipientId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { recipientId } = req.params;
+    try {
+        const updateResult = yield prisma.email.update({
+            where: {
+                recipientId
+            },
+            data: {
+                opened: true
+            }
+        });
+        if (!updateResult) {
+            return res.status(404).json({
+                status: "failed",
+                message: "wrong id"
+            });
+        }
+        const imgBuffer = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+        res.writeHead(200, {
+            'Content-Type': 'image/gif',
+            'Content-Length': imgBuffer.length,
+        });
+        res.end(imgBuffer);
     }
     catch (err) {
         console.error(err);

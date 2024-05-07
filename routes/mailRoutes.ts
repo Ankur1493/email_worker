@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Router, Request, Response } from "express";
 import { google } from "googleapis";
+import { v4 as uuid } from "uuid";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -26,7 +27,7 @@ router.post("/", async (req: Request, res: Response) => {
     const refreshToken = user?.refreshToken;
 
     if (!accessToken || !refreshToken) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: "failed",
         message: "You are not authorized. Try to login again.",
       });
@@ -41,7 +42,9 @@ router.post("/", async (req: Request, res: Response) => {
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const emailContent = `Content-Type: text/html; charset="UTF-8"\nMIME-Version: 1.0\nContent-Transfer-Encoding: 7bit\nto: ${mailRecipient}\nsubject: ${mailSubject}\n\n<html><body>${mailBody}<img src="https://yourserver.com/tracking.gif?emailId=UNIQUE_EMAIL_ID" alt="" style="display:none;"></body></html>`;
+    const recipientId = uuid();
+
+    const emailContent = `Content-Type: text/html; charset="UTF-8"\nMIME-Version: 1.0\nContent-Transfer-Encoding: 7bit\nto: ${mailRecipient}\nsubject: ${mailSubject}\n\n<html><body>${mailBody}<img src="http://localhost:3000/mail/track/${recipientId}" alt="" style="display:none;"></body></html>`;
 
     const encodedMessage = Buffer.from(emailContent).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
@@ -52,7 +55,7 @@ router.post("/", async (req: Request, res: Response) => {
       },
     });
     if (!sendResponse || !sendResponse.data.id) {
-      return res.status(400).json({
+      return res.status(500).json({
         status: "failed",
         message: "problem in sending the mail"
       })
@@ -64,7 +67,8 @@ router.post("/", async (req: Request, res: Response) => {
         body: mailBody,
         userId: userId,
         receipent: mailRecipient,
-        emailId: sendResponse.data.id
+        emailId: sendResponse.data.id,
+        recipientId: recipientId,
       },
     });
 
@@ -145,5 +149,38 @@ router.get("/:id/:userId", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/track/:recipientId", async (req: Request, res: Response) => {
+  const { recipientId } = req.params;
+  try {
+    const updateResult = await prisma.email.update({
+      where: {
+        recipientId
+      },
+      data: {
+        opened: true
+      }
+    });
+
+    if (!updateResult) {
+      return res.status(404).json({
+        status: "failed",
+        message: "wrong id"
+      })
+    }
+    const imgBuffer = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    res.writeHead(200, {
+      'Content-Type': 'image/gif',
+      'Content-Length': imgBuffer.length,
+    });
+    res.end(imgBuffer);
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      status: "failed",
+      message: "This one's on us.",
+    });
+  }
+});
 export { router as mailRouter };
 
