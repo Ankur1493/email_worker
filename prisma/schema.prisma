@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id            Int     @id @default(autoincrement())
+  email         String  @unique
+  accessToken   String
+  refreshToken  String
+  emails        Email[] // Relation field to connect users with their emails
+}
+
+model Email {
+  id        Int      @id @default(autoincrement())
+  subject   String
+  body      String
+  opened    Boolean  @default(false)
+  replied   Boolean  @default(false)
+  userId    Int      // Foreign key to associate email with a user
+  user      User     @relation(fields: [userId], references: [id]) // Relation field to connect emails back to a user
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
